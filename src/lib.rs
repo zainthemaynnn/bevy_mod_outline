@@ -48,6 +48,9 @@ use crate::uniforms::{
 use crate::view_uniforms::{
     extract_outline_view_uniforms, queue_outline_view_bind_group, OutlineViewUniform,
 };
+use crate::animation_uniforms::{
+    extract_outline_animation_uniforms, queue_outline_animation_bind_group, OutlineAnimationUniform,
+};
 
 mod computed;
 mod draw;
@@ -56,6 +59,7 @@ mod node;
 mod pipeline;
 mod uniforms;
 mod view_uniforms;
+mod animation_uniforms;
 
 pub use computed::*;
 pub use generate::*;
@@ -150,6 +154,11 @@ impl Lerp for OutlineVolume {
     }
 }
 
+#[derive(Clone, Component, Default)]
+pub struct OutlineAnimation {
+    pub rate_millis: f32,
+}
+
 /// A component for specifying what layer(s) the outline should be rendered for.
 #[derive(Component, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Deref, DerefMut, Default)]
 pub struct OutlineRenderLayers(pub RenderLayers);
@@ -180,6 +189,7 @@ pub struct OutlineBundle {
     pub outline: OutlineVolume,
     pub stencil: OutlineStencil,
     pub plane: ComputedOutlineDepth,
+    pub animation: OutlineAnimation,
 }
 
 /// A bundle for stenciling meshes in the outlining pass.
@@ -213,6 +223,7 @@ impl Plugin for OutlinePlugin {
             .add_plugin(UniformComponentPlugin::<OutlineVolumeUniform>::default())
             .add_plugin(UniformComponentPlugin::<OutlineFragmentUniform>::default())
             .add_plugin(UniformComponentPlugin::<OutlineViewUniform>::default())
+            .add_plugin(UniformComponentPlugin::<OutlineAnimationUniform>::default())
             .add_system(
                 compute_outline_depth
                     .in_base_set(CoreSet::PostUpdate)
@@ -230,12 +241,14 @@ impl Plugin for OutlinePlugin {
             .add_system(extract_outline_view_uniforms.in_schedule(ExtractSchedule))
             .add_system(extract_outline_stencil_uniforms.in_schedule(ExtractSchedule))
             .add_system(extract_outline_volume_uniforms.in_schedule(ExtractSchedule))
+            .add_system(extract_outline_animation_uniforms.in_schedule(ExtractSchedule))
             .add_system(sort_phase_system::<StencilOutline>.in_set(RenderSet::PhaseSort))
             .add_system(sort_phase_system::<OpaqueOutline>.in_set(RenderSet::PhaseSort))
             .add_system(sort_phase_system::<TransparentOutline>.in_set(RenderSet::PhaseSort))
             .add_system(queue_outline_view_bind_group.in_set(RenderSet::Queue))
             .add_system(queue_outline_stencil_bind_group.in_set(RenderSet::Queue))
             .add_system(queue_outline_volume_bind_group.in_set(RenderSet::Queue))
+            .add_system(queue_outline_animation_bind_group.in_set(RenderSet::Queue))
             .add_system(queue_outline_stencil_mesh.in_set(RenderSet::Queue))
             .add_system(queue_outline_volume_mesh.in_set(RenderSet::Queue));
 

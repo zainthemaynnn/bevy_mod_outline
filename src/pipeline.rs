@@ -28,6 +28,7 @@ use crate::uniforms::{
     DepthMode, OutlineFragmentUniform, OutlineStencilUniform, OutlineVolumeUniform,
 };
 use crate::view_uniforms::OutlineViewUniform;
+use crate::animation_uniforms::OutlineAnimationUniform;
 use crate::ATTRIBUTE_OUTLINE_NORMAL;
 
 pub(crate) const OUTLINE_SHADER_HANDLE: HandleUntyped =
@@ -137,6 +138,7 @@ pub(crate) struct OutlinePipeline {
     pub outline_view_bind_group_layout: BindGroupLayout,
     pub outline_stencil_bind_group_layout: BindGroupLayout,
     pub outline_volume_bind_group_layout: BindGroupLayout,
+    pub outline_animation_bind_group_layout: BindGroupLayout,
 }
 
 impl FromWorld for OutlinePipeline {
@@ -202,11 +204,26 @@ impl FromWorld for OutlinePipeline {
                     count: None,
                 }],
             });
+        let outline_animation_bind_group_layout =
+            render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("outline_animation_bind_group_layout"),
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: true,
+                        min_binding_size: BufferSize::new(OutlineAnimationUniform::SHADER_SIZE.get()),
+                    },
+                    count: None,
+                }],
+            });
         OutlinePipeline {
             mesh_pipeline,
             outline_view_bind_group_layout,
             outline_stencil_bind_group_layout,
             outline_volume_bind_group_layout,
+            outline_animation_bind_group_layout,
         }
     }
 }
@@ -294,6 +311,7 @@ impl SpecializedMeshPipeline for OutlinePipeline {
                 bind_layouts.push(self.outline_volume_bind_group_layout.clone());
             }
         }
+        bind_layouts.push(self.outline_animation_bind_group_layout.clone());
         let buffers = vec![mesh_layout.get_layout(&buffer_attrs)?];
         Ok(RenderPipelineDescriptor {
             vertex: VertexState {
