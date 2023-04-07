@@ -5,7 +5,7 @@ use bevy::render::render_phase::{DrawFunctions, RenderPhase, SetItemPipeline};
 use bevy::render::render_resource::{PipelineCache, SpecializedMeshPipelines};
 use bevy::render::view::{ExtractedView, RenderLayers};
 
-use crate::animation_uniforms::SetOutlineAnimationBindGroup;
+use crate::deform_uniforms::SetOutlineDeformBindGroup;
 use crate::node::{OpaqueOutline, StencilOutline, TransparentOutline};
 use crate::pipeline::{OutlinePipeline, PassType, PipelineKey};
 use crate::uniforms::{
@@ -21,7 +21,7 @@ pub(crate) type DrawStencil = (
     SetMeshBindGroup<1>,
     SetOutlineViewBindGroup<2>,
     SetOutlineStencilBindGroup<3>,
-    SetOutlineAnimationBindGroup<4>,
+    SetOutlineDeformBindGroup<4>,
     DrawMesh,
 );
 
@@ -91,7 +91,7 @@ pub(crate) type DrawOutline = (
     SetMeshBindGroup<1>,
     SetOutlineViewBindGroup<2>,
     SetOutlineVolumeBindGroup<3>,
-    SetOutlineAnimationBindGroup<4>,
+    SetOutlineDeformBindGroup<4>,
     DrawMesh,
 );
 

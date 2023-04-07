@@ -96,10 +96,9 @@ struct OutlineVertexUniform {
     offset: f32,
 };
 
-struct OutlineAnimationUniform {
-    @align(8)
-    time: f32,
-    rate: f32,
+struct OutlineDeformUniform {
+    @align(4)
+    seed: f32,
 };
 
 @group(1) @binding(0)
@@ -118,7 +117,7 @@ var<uniform> view_uniform: OutlineViewUniform;
 var<uniform> vstage: OutlineVertexUniform;
 
 @group(4) @binding(0)
-var<uniform> animation: OutlineAnimationUniform;
+var<uniform> deform: OutlineDeformUniform;
 
 fn mat4to3(m: mat4x4<f32>) -> mat3x3<f32> {
     return mat3x3<f32>(
@@ -139,11 +138,7 @@ fn vertex(vertex: VertexInput) -> @builtin(position) vec4<f32> {
     let MIN_SCALE = 0.7;
     var p = vertex.position;
 
-    if i32(floor(animation.time / animation.rate)) % 2 == 0 {
-        p = p + vec3(1000f);
-    }
-
-    let scale = MIN_SCALE + simplexNoise3(p) * (1.0-MIN_SCALE);
+    let scale = MIN_SCALE + simplexNoise3(p + vec3(deform.seed)) * (1.0-MIN_SCALE);
 
 #ifdef SKINNED
     let model = skin_model(vertex.joint_indexes, vertex.joint_weights);

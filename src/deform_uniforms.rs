@@ -10,66 +10,63 @@ use bevy::render::render_resource::{BindGroup, BindGroupDescriptor, BindGroupEnt
 use bevy::render::renderer::RenderDevice;
 use bevy::render::Extract;
 
-use crate::OutlineAnimation;
+use crate::OutlineDeform;
 use crate::pipeline::OutlinePipeline;
 
 #[derive(Clone, Component, ShaderType)]
-pub(crate) struct OutlineAnimationUniform {
-    #[align(8)]
-    pub time: f32,
-    pub rate_millis: f32,
+pub(crate) struct OutlineDeformUniform {
+    #[align(4)]
+    pub seed: f32,
 }
 
 #[derive(Resource)]
-pub(crate) struct OutlineAnimationBindGroup {
+pub(crate) struct OutlineDeformBindGroup {
     pub bind_group: BindGroup,
 }
 
 #[allow(clippy::type_complexity)]
-pub(crate) fn extract_outline_animation_uniforms(
+pub(crate) fn extract_outline_deform_uniforms(
     mut commands: Commands,
-    query: Extract<Query<(Entity, &OutlineAnimation)>>,
-    time: Res<Time>,
+    query: Extract<Query<(Entity, &OutlineDeform)>>,
 ) {
-    for (entity, animation) in query.iter() {
+    for (entity, deform) in query.iter() {
         commands
             .get_or_spawn(entity)
-            .insert(OutlineAnimationUniform {
-                time: time.elapsed().as_millis() as f32,
-                rate_millis: animation.rate_millis,
+            .insert(OutlineDeformUniform {
+                seed: deform.seed,
             });
     }
 }
 
-pub(crate) fn queue_outline_animation_bind_group(
+pub(crate) fn queue_outline_deform_bind_group(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
     outline_pipeline: Res<OutlinePipeline>,
-    outline_animation_uniforms: Res<ComponentUniforms<OutlineAnimationUniform>>,
+    outline_deform_uniforms: Res<ComponentUniforms<OutlineDeformUniform>>,
 ) {
-    if let Some(animation_binding) = outline_animation_uniforms.binding() {
+    if let Some(deform_binding) = outline_deform_uniforms.binding() {
         let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
             entries: &[BindGroupEntry {
                 binding: 0,
-                resource: animation_binding.clone(),
+                resource: deform_binding.clone(),
             }],
-            label: Some("outline_animation_bind_group"),
-            layout: &outline_pipeline.outline_animation_bind_group_layout,
+            label: Some("outline_deform_bind_group"),
+            layout: &outline_pipeline.outline_deform_bind_group_layout,
         });
-        commands.insert_resource(OutlineAnimationBindGroup { bind_group });
+        commands.insert_resource(OutlineDeformBindGroup { bind_group });
     }
 }
 
-pub(crate) struct SetOutlineAnimationBindGroup<const I: usize>();
+pub(crate) struct SetOutlineDeformBindGroup<const I: usize>();
 
-impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetOutlineAnimationBindGroup<I> {
+impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetOutlineDeformBindGroup<I> {
     type ViewWorldQuery = ();
-    type ItemWorldQuery = Read<DynamicUniformIndex<OutlineAnimationUniform>>;
-    type Param = SRes<OutlineAnimationBindGroup>;
+    type ItemWorldQuery = Read<DynamicUniformIndex<OutlineDeformUniform>>;
+    type Param = SRes<OutlineDeformBindGroup>;
     fn render<'w>(
         _item: &P,
         _view_data: (),
-        entity_data: &DynamicUniformIndex<OutlineAnimationUniform>,
+        entity_data: &DynamicUniformIndex<OutlineDeformUniform>,
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
