@@ -1,3 +1,7 @@
+# disclaimer
+This is a fork by me, used for GRIN, which messes with the shaders and pipelines a little bit
+by randomizing the outline width across mesh vertices using `OutlineDeform`. Otherwise, it's pretty much the same.
+
 # bevy_mod_outline
 
 [![crates.io](https://img.shields.io/crates/v/bevy_mod_outline.svg)](https://crates.io/crates/bevy_mod_outline)
