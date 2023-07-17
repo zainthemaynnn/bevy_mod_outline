@@ -1,5 +1,6 @@
-#import bevy_pbr::mesh_view_bindings
-#import bevy_pbr::mesh_types
+#import bevy_render::view  View
+#import bevy_pbr::mesh_types Mesh
+#import bevy_pbr::mesh_types SkinnedMesh
 
 //  MIT License. © Ian McEwan, Stefan Gustavson, Munrocket
 //
@@ -85,6 +86,13 @@ struct VertexInput {
 #endif
 };
 
+struct VertexOutput {
+    @builtin(position) position: vec4<f32>,
+#ifdef OPENGL_WORKAROUND
+    @location(0) normalised_depth: f32,
+#endif
+};
+
 struct OutlineViewUniform {
     @align(16)
     scale: vec2<f32>,
@@ -100,6 +108,9 @@ struct OutlineDeformUniform {
     @align(4)
     seed: f32,
 };
+
+@group(0) @binding(0)
+var<uniform> view: View;
 
 @group(1) @binding(0)
 var<uniform> mesh: Mesh;
@@ -134,30 +145,32 @@ fn model_origin_z(plane: vec3<f32>, view_proj: mat4x4<f32>) -> f32 {
 }
 
 @vertex
-fn vertex(vertex: VertexInput) -> @builtin(position) vec4<f32> {
+fn vertex(vertex: VertexInput) -> VertexOutput {
     let MIN_SCALE = 0.7;
     var p = vertex.position;
-
     let scale = mix(MIN_SCALE, 1.0, simplexNoise3(p + vec3(deform.seed)));
-
 #ifdef SKINNED
-    let model = skin_model(vertex.joint_indexes, vertex.joint_weights);
+    let model = bevy_pbr::skinning::skin_model(vertex.joint_indexes, vertex.joint_weights);
 #else
     let model = mesh.model;
 #endif
     let clip_pos = view.view_proj * (model * vec4<f32>(vertex.position, 1.0));
 #ifdef FLAT_DEPTH
-    let out_zw = vec2<f32>(model_origin_z(vstage.origin, view.view_proj) * clip_pos.w, clip_pos.w);
+    let out_z = model_origin_z(vstage.origin, view.view_proj) * clip_pos.w;
 #else
-    let out_zw = clip_pos.zw;
+    let out_z = clip_pos.z;
 #endif
 #ifdef OFFSET_ZERO
     let out_xy = clip_pos.xy;
 #else
     let clip_norm = mat4to3(view.view_proj) * (mat4to3(model) * vertex.normal);
-
-    let ndc_delta = vstage.offset * normalize(clip_norm.xy) * view_uniform.scale * out_zw.y * scale;
+    let ndc_delta = vstage.offset * normalize(clip_norm.xy) * view_uniform.scale * clip_pos.w * scale;
     let out_xy = clip_pos.xy + ndc_delta;
 #endif
-    return vec4<f32>(out_xy, out_zw);
+    var out: VertexOutput;
+    out.position = vec4<f32>(out_xy, out_z, clip_pos.w);
+#ifdef OPENGL_WORKAROUND
+    out.normalised_depth = 0.5 + 0.5 * (out_z / clip_pos.w);
+#endif
+    return out;
 }

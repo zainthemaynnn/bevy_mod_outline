@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 
-use bevy::pbr::{MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS};
 use bevy::prelude::*;
 use bevy::reflect::TypeUuid;
 use bevy::render::render_resource::{
@@ -57,6 +56,7 @@ impl PipelineKey {
         depth_mode_int, set_depth_mode_int: 12, 11;
         pub offset_zero, set_offset_zero: 13;
         pub hdr_format, set_hdr_format: 14;
+        pub opengl_workaround, set_opengl_workaround: 15;
     }
 
     pub(crate) fn new() -> Self {
@@ -128,6 +128,11 @@ impl PipelineKey {
 
     pub(crate) fn with_hdr_format(mut self, hdr_format: bool) -> Self {
         self.set_hdr_format(hdr_format);
+        self
+    }
+
+    pub(crate) fn with_opengl_workaround(mut self, opengl_workaround: bool) -> Self {
+        self.set_opengl_workaround(opengl_workaround);
         self
     }
 }
@@ -243,27 +248,19 @@ impl SpecializedMeshPipeline for OutlinePipeline {
             self.mesh_pipeline.view_layout_multisampled.clone()
         }];
         let mut buffer_attrs = vec![Mesh::ATTRIBUTE_POSITION.at_shader_location(0)];
-        let mut vertex_defs = vec![
-            ShaderDefVal::Int(
-                "MAX_CASCADES_PER_LIGHT".to_string(),
-                MAX_CASCADES_PER_LIGHT as i32,
-            ),
-            ShaderDefVal::Int(
-                "MAX_DIRECTIONAL_LIGHTS".to_string(),
-                MAX_DIRECTIONAL_LIGHTS as i32,
-            ),
-        ];
+        let mut vertex_defs = vec![];
         let mut fragment_defs = vec![];
         bind_layouts.push(
             if mesh_layout.contains(Mesh::ATTRIBUTE_JOINT_INDEX)
                 && mesh_layout.contains(Mesh::ATTRIBUTE_JOINT_WEIGHT)
             {
                 vertex_defs.push(ShaderDefVal::from("SKINNED"));
+                vertex_defs.push("MESH_BINDGROUP_1".into());
                 buffer_attrs.push(Mesh::ATTRIBUTE_JOINT_INDEX.at_shader_location(2));
                 buffer_attrs.push(Mesh::ATTRIBUTE_JOINT_WEIGHT.at_shader_location(3));
-                self.mesh_pipeline.skinned_mesh_layout.clone()
+                self.mesh_pipeline.mesh_layouts.skinned.clone()
             } else {
-                self.mesh_pipeline.mesh_layout.clone()
+                self.mesh_pipeline.mesh_layouts.model_only.clone()
             },
         );
         bind_layouts.push(self.outline_view_bind_group_layout.clone());
@@ -312,6 +309,11 @@ impl SpecializedMeshPipeline for OutlinePipeline {
             }
         }
         bind_layouts.push(self.outline_deform_bind_group_layout.clone());
+        if key.opengl_workaround() {
+            let val = ShaderDefVal::from("OPENGL_WORKAROUND");
+            vertex_defs.push(val.clone());
+            fragment_defs.push(val);
+        }
         let buffers = vec![mesh_layout.get_layout(&buffer_attrs)?];
         Ok(RenderPipelineDescriptor {
             vertex: VertexState {
