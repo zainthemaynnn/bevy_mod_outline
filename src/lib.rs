@@ -224,6 +224,7 @@ impl Plugin for OutlinePlugin {
             UniformComponentPlugin::<OutlineVolumeUniform>::default(),
             UniformComponentPlugin::<OutlineFragmentUniform>::default(),
             UniformComponentPlugin::<OutlineViewUniform>::default(),
+            UniformComponentPlugin::<OutlineDeformUniform>::default(),
         ))
         .add_systems(
             PostUpdate,
