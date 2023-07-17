@@ -138,7 +138,7 @@ fn vertex(vertex: VertexInput) -> @builtin(position) vec4<f32> {
     let MIN_SCALE = 0.7;
     var p = vertex.position;
 
-    let scale = MIN_SCALE + simplexNoise3(p + vec3(deform.seed)) * (1.0-MIN_SCALE);
+    let scale = mix(MIN_SCALE, 1.0, simplexNoise3(p + vec3(deform.seed)));
 
 #ifdef SKINNED
     let model = skin_model(vertex.joint_indexes, vertex.joint_weights);
