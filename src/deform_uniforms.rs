@@ -10,8 +10,8 @@ use bevy::render::render_resource::{BindGroup, BindGroupDescriptor, BindGroupEnt
 use bevy::render::renderer::RenderDevice;
 use bevy::render::Extract;
 
-use crate::OutlineDeform;
 use crate::pipeline::OutlinePipeline;
+use crate::OutlineDeform;
 
 #[derive(Clone, Component, ShaderType)]
 pub(crate) struct OutlineDeformUniform {
@@ -32,9 +32,7 @@ pub(crate) fn extract_outline_deform_uniforms(
     for (entity, deform) in query.iter() {
         commands
             .get_or_spawn(entity)
-            .insert(OutlineDeformUniform {
-                seed: deform.seed,
-            });
+            .insert(OutlineDeformUniform { seed: deform.seed });
     }
 }
 
@@ -70,7 +68,11 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetOutlineDeformBindGrou
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        pass.set_bind_group(I, &bind_group.into_inner().bind_group, &[entity_data.index()]);
+        pass.set_bind_group(
+            I,
+            &bind_group.into_inner().bind_group,
+            &[entity_data.index()],
+        );
         RenderCommandResult::Success
     }
 }

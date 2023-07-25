@@ -23,11 +23,11 @@ use bevy::{
 };
 use bitfield::{bitfield_bitrange, bitfield_fields};
 
+use crate::deform_uniforms::OutlineDeformUniform;
 use crate::uniforms::{
     DepthMode, OutlineFragmentUniform, OutlineStencilUniform, OutlineVolumeUniform,
 };
 use crate::view_uniforms::OutlineViewUniform;
-use crate::deform_uniforms::OutlineDeformUniform;
 use crate::ATTRIBUTE_OUTLINE_NORMAL;
 
 pub(crate) const OUTLINE_SHADER_HANDLE: HandleUntyped =

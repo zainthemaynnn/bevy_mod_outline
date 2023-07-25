@@ -35,6 +35,9 @@ use bevy::render::{Render, RenderApp, RenderSet};
 use bevy::transform::TransformSystem;
 use interpolation::Lerp;
 
+use crate::deform_uniforms::{
+    extract_outline_deform_uniforms, queue_outline_deform_bind_group, OutlineDeformUniform,
+};
 use crate::draw::{
     queue_outline_stencil_mesh, queue_outline_volume_mesh, DrawOutline, DrawStencil,
 };
@@ -48,18 +51,15 @@ use crate::uniforms::{
 use crate::view_uniforms::{
     extract_outline_view_uniforms, queue_outline_view_bind_group, OutlineViewUniform,
 };
-use crate::deform_uniforms::{
-    extract_outline_deform_uniforms, queue_outline_deform_bind_group, OutlineDeformUniform,
-};
 
 mod computed;
+mod deform_uniforms;
 mod draw;
 mod generate;
 mod node;
 mod pipeline;
 mod uniforms;
 mod view_uniforms;
-mod deform_uniforms;
 
 pub use computed::*;
 pub use generate::*;
