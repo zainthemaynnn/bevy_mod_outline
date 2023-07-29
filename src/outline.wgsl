@@ -175,12 +175,11 @@ fn model_origin_z(plane: vec3<f32>, view_proj: mat4x4<f32>) -> f32 {
 
 @vertex
 fn vertex(vertex_no_morph: Vertex) -> VertexOutput {
-    #ifdef MORPH_TARGETS
-        var vertex = morph_vertex(vertex_no_morph);
-    #else
-        var vertex = vertex_no_morph;
-    #endif
-
+#ifdef MORPH_TARGETS
+    var vertex = morph_vertex(vertex_no_morph);
+#else
+    var vertex = vertex_no_morph;
+#endif
     let MIN_SCALE = 0.7;
     var p = vertex.position;
     let scale = mix(MIN_SCALE, 1.0, simplexNoise3(p + vec3(deform.seed)));
