@@ -181,8 +181,7 @@ fn vertex(vertex_no_morph: Vertex) -> VertexOutput {
     var vertex = vertex_no_morph;
 #endif
     let MIN_SCALE = 0.7;
-    var p = vertex.position;
-    let scale = mix(MIN_SCALE, 1.0, simplexNoise3(p + vec3(deform.seed)));
+    let scale = mix(MIN_SCALE, 1.0, simplexNoise3(vertex_no_morph.position + vec3(deform.seed)));
 #ifdef SKINNED
     let model = bevy_pbr::skinning::skin_model(vertex.joint_indices, vertex.joint_weights);
 #else
