@@ -17,7 +17,7 @@ vertex extrusion method.
 
 ```toml
 [dependencies]
-bevy_mod_outline = "0.4"
+bevy_mod_outline = "0.6"
 ```
 
 ## Examples
@@ -33,6 +33,13 @@ a gap between the object and its outline.
 
 ```shell
 cargo run --example pieces
+```
+
+Many instances of the same mesh, with two different outline configurations, flying towards the
+camera.
+
+```shell
+cargo run --example flying_objects
 ```
 
 An outlined torus viewed through four cameras with different combinations of render layers
@@ -54,14 +61,22 @@ A glTF model with pre-baked outline normals.
 cargo run --example hollow
 ```
 
+An animated morphing glTF model with an outline.
+
+```shell
+cargo run --example morph_targets
+```
+
 ## Versions
 
 | This Version | Bevy version |
 |--------------|--------------|
-| 0.1.x        | 0.7.x        |
-| 0.2.x        | 0.8.x        |
-| 0.3.x        | 0.9.x        |
+| 0.6.x        | 0.12.x       |
+| 0.5.x        | 0.11.x       |
 | 0.4.x        | 0.10.x       |
+| 0.3.x        | 0.9.x        |
+| 0.2.x        | 0.8.x        |
+| 0.1.x        | 0.7.x        |
 
 ## Features
 

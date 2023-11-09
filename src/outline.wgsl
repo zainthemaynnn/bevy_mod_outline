@@ -1,6 +1,8 @@
-#import bevy_render::view  View
-#import bevy_pbr::mesh_types Mesh
-#import bevy_pbr::mesh_types SkinnedMesh
+#import bevy_render::view::View
+#import bevy_render::maths
+#import bevy_pbr::mesh_types::Mesh
+#import bevy_pbr::mesh_types::SkinnedMesh
+#import bevy_pbr::mesh_functions
 
 //  MIT License. © Ian McEwan, Stefan Gustavson, Munrocket
 //
@@ -75,39 +77,13 @@ fn simplexNoise3(v: vec3<f32>) -> f32 {
   return 42. * dot(m * m, vec4<f32>(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
 }
 
-#ifdef MORPH_TARGETS
-fn morph_vertex(vertex_in: Vertex) -> Vertex {
-    var vertex = vertex_in;
-    let weight_count = bevy_pbr::morph::layer_count();
-    for (var i: u32 = 0u; i < weight_count; i ++) {
-        let weight = bevy_pbr::morph::weight_at(i);
-        if weight == 0.0 {
-            continue;
-        }
-        vertex.position += weight * bevy_pbr::morph::morph(vertex.index, bevy_pbr::morph::position_offset, i);
-#ifdef VERTEX_NORMALS
-        vertex.normal += weight * bevy_pbr::morph::morph(vertex.index, bevy_pbr::morph::normal_offset, i);
-#endif
-#ifdef VERTEX_TANGENTS
-        vertex.tangent += vec4(weight * bevy_pbr::morph::morph(vertex.index, bevy_pbr::morph::tangent_offset, i), 0.0);
-#endif
-    }
-    return vertex;
-}
-#endif
-
 struct Vertex {
 #ifdef VERTEX_POSITIONS
     @location(0) position: vec3<f32>,
+    @builtin(instance_index) instance_index: u32,
 #endif
 #ifndef OFFSET_ZERO
     @location(1) outline_normal: vec3<f32>,
-#endif
-#ifdef VERTEX_NORMALS
-    @location(2) normal: vec3<f32>,
-#endif
-#ifdef VERTEX_TANGENTS
-    @location(3) tangent: vec4<f32>,
 #endif
 #ifdef SKINNED
     @location(5) joint_indices: vec4<u32>,
@@ -120,8 +96,8 @@ struct Vertex {
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
-#ifdef OPENGL_WORKAROUND
-    @location(0) normalised_depth: f32,
+#ifdef FLAT_DEPTH
+    @location(0) @interpolate(flat) flat_depth: f32,
 #endif
 };
 
@@ -144,9 +120,7 @@ struct OutlineDeformUniform {
 @group(0) @binding(0)
 var<uniform> view: View;
 
-@group(1) @binding(0)
-var<uniform> mesh: Mesh;
-
+#import bevy_pbr::mesh_bindings
 #import bevy_pbr::skinning
 #import bevy_pbr::morph
 
@@ -158,6 +132,21 @@ var<uniform> vstage: OutlineVertexUniform;
 
 @group(4) @binding(0)
 var<uniform> deform: OutlineDeformUniform;
+
+#ifdef MORPH_TARGETS
+fn morph_vertex(vertex_in: Vertex) -> Vertex {
+    var vertex = vertex_in;
+    let weight_count = bevy_pbr::morph::layer_count();
+    for (var i: u32 = 0u; i < weight_count; i ++) {
+        let weight = bevy_pbr::morph::weight_at(i);
+        if weight == 0.0 {
+            continue;
+        }
+        vertex.position += weight * bevy_pbr::morph::morph(vertex.index, bevy_pbr::morph::position_offset, i);
+    }
+    return vertex;
+}
+#endif
 
 fn mat4to3(m: mat4x4<f32>) -> mat3x3<f32> {
     return mat3x3<f32>(
@@ -185,14 +174,9 @@ fn vertex(vertex_no_morph: Vertex) -> VertexOutput {
 #ifdef SKINNED
     let model = bevy_pbr::skinning::skin_model(vertex.joint_indices, vertex.joint_weights);
 #else
-    let model = mesh.model;
+    let model = bevy_pbr::mesh_functions::get_model_matrix(vertex_no_morph.instance_index);
 #endif
     let clip_pos = view.view_proj * (model * vec4<f32>(vertex.position, 1.0));
-#ifdef FLAT_DEPTH
-    let out_z = model_origin_z(vstage.origin, view.view_proj) * clip_pos.w;
-#else
-    let out_z = clip_pos.z;
-#endif
 #ifdef OFFSET_ZERO
     let out_xy = clip_pos.xy;
 #else
@@ -201,9 +185,9 @@ fn vertex(vertex_no_morph: Vertex) -> VertexOutput {
     let out_xy = clip_pos.xy + ndc_delta;
 #endif
     var out: VertexOutput;
-    out.position = vec4<f32>(out_xy, out_z, clip_pos.w);
-#ifdef OPENGL_WORKAROUND
-    out.normalised_depth = 0.5 + 0.5 * (out_z / clip_pos.w);
+    out.position = vec4<f32>(out_xy, clip_pos.zw);
+#ifdef FLAT_DEPTH
+    out.flat_depth = model_origin_z(vstage.origin, view.view_proj);
 #endif
     return out;
 }

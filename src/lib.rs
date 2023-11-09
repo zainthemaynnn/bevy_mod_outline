@@ -3,17 +3,19 @@
 //!
 //! Outlines are rendered in a seperate pass following the main 3D pass. The effect of this
 //! pass is to present the outlines in depth sorted order according to the model translation
-//! of each mesh. This ensures that outlines are not clipped by other geometry.
+//! of each mesh. This ensures that outlines are not clipped by non-outline geometry.
 //!
 //! The [`OutlineVolume`] component will, by itself, cover the original object entirely with
 //! the outline colour. The [`OutlineStencil`] component must also be added to prevent the body
 //! of an object from being filled it. This must be added to any entity which needs to appear on
 //! top of an outline.
 //!
+//! The [`OutlineMode`] component specifies the rendering method. Outlines may be flattened into
+//! a plane in order to further avoid clipping, or left in real space.
+//!
 //! The [`OutlineBundle`] and [`OutlineStencilBundle`] bundles can be used to add the right
-//! components, including the required [`ComputedOutlineDepth`] component. Optionally, the
-//! [`SetOutlineDepth`] and [`InheritOutlineDepth`] components may also be added to control the
-//! depth ordering of outlines.
+//! components, including the required [`ComputedOutline`] component. Outlines can be inherited
+//! from the parent via the [`InheritOutline`] component and [`InheritOutlineBundle`].
 //!
 //! Vertex extrusion works best with meshes that have smooth surfaces. To avoid visual
 //! artefacts when outlining meshes with hard edges, see the
@@ -21,8 +23,8 @@
 //! [`AutoGenerateOutlineNormalsPlugin`].
 
 use bevy::asset::load_internal_asset;
-use bevy::ecs::query::QueryItem;
 use bevy::prelude::*;
+use bevy::render::batching::{batch_and_prepare_render_phase, write_batched_instance_buffer};
 use bevy::render::extract_component::{
     ExtractComponent, ExtractComponentPlugin, UniformComponentPlugin,
 };
@@ -30,13 +32,13 @@ use bevy::render::mesh::MeshVertexAttribute;
 use bevy::render::render_graph::RenderGraph;
 use bevy::render::render_phase::{sort_phase_system, AddRenderCommand, DrawFunctions};
 use bevy::render::render_resource::{SpecializedMeshPipelines, VertexFormat};
-use bevy::render::view::RenderLayers;
+use bevy::render::view::{RenderLayers, VisibilitySystems};
 use bevy::render::{Render, RenderApp, RenderSet};
 use bevy::transform::TransformSystem;
 use interpolation::Lerp;
 
 use crate::deform_uniforms::{
-    extract_outline_deform_uniforms, queue_outline_deform_bind_group, OutlineDeformUniform,
+    extract_outline_deform_uniforms, prepare_outline_deform_bind_group, OutlineDeformUniform,
 };
 use crate::draw::{
     queue_outline_stencil_mesh, queue_outline_volume_mesh, DrawOutline, DrawStencil,
@@ -44,12 +46,12 @@ use crate::draw::{
 use crate::node::{OpaqueOutline, OutlineNode, StencilOutline, TransparentOutline};
 use crate::pipeline::{OutlinePipeline, FRAGMENT_SHADER_HANDLE, OUTLINE_SHADER_HANDLE};
 use crate::uniforms::{
-    extract_outline_stencil_uniforms, extract_outline_volume_uniforms,
-    queue_outline_stencil_bind_group, queue_outline_volume_bind_group, OutlineFragmentUniform,
+    extract_outline_uniforms, prepare_outline_stencil_bind_group,
+    prepare_outline_volume_bind_group, set_outline_visibility, OutlineFragmentUniform,
     OutlineStencilUniform, OutlineVolumeUniform,
 };
 use crate::view_uniforms::{
-    extract_outline_view_uniforms, queue_outline_view_bind_group, OutlineViewUniform,
+    extract_outline_view_uniforms, prepare_outline_view_bind_group, OutlineViewUniform,
 };
 
 mod computed;
@@ -91,16 +93,6 @@ impl Default for OutlineStencil {
             enabled: true,
             offset: 0.0,
         }
-    }
-}
-
-impl ExtractComponent for OutlineStencil {
-    type Query = &'static OutlineStencil;
-    type Filter = ();
-    type Out = Self;
-
-    fn extract_component(item: QueryItem<Self::Query>) -> Option<Self> {
-        Some(item.clone())
     }
 }
 
@@ -168,7 +160,7 @@ impl ExtractComponent for OutlineRenderLayers {
         Option<&'static OutlineRenderLayers>,
         Option<&'static RenderLayers>,
     );
-    type Filter = Or<(With<OutlineVolume>, With<OutlineStencil>)>;
+    type Filter = With<ComputedOutline>;
     type Out = Self;
 
     fn extract_component(
@@ -183,12 +175,36 @@ impl ExtractComponent for OutlineRenderLayers {
     }
 }
 
+/// A component which specifies how the outline should be rendered.
+#[derive(Clone, Component)]
+#[non_exhaustive]
+pub enum OutlineMode {
+    /// Vertex extrusion flattened into a plane facing the camera and intersecting the specified
+    /// point in model-space.
+    FlatVertex { model_origin: Vec3 },
+    /// Vertex extrusion in real model-space.
+    RealVertex,
+}
+
+impl Default for OutlineMode {
+    fn default() -> Self {
+        OutlineMode::FlatVertex {
+            model_origin: Vec3::ZERO,
+        }
+    }
+}
+
+/// A component for inheriting outlines from the parent entity.
+#[derive(Clone, Component, Default)]
+pub struct InheritOutline;
+
 /// A bundle for rendering stenciled outlines around meshes.
 #[derive(Bundle, Clone, Default)]
 pub struct OutlineBundle {
     pub outline: OutlineVolume,
     pub stencil: OutlineStencil,
-    pub plane: ComputedOutlineDepth,
+    pub mode: OutlineMode,
+    pub computed: ComputedOutline,
     pub deform: OutlineDeform,
 }
 
@@ -196,7 +212,15 @@ pub struct OutlineBundle {
 #[derive(Bundle, Clone, Default)]
 pub struct OutlineStencilBundle {
     pub stencil: OutlineStencil,
-    pub plane: ComputedOutlineDepth,
+    pub mode: OutlineMode,
+    pub computed: ComputedOutline,
+}
+
+/// A bundle for inheriting outlines from the parent entity.
+#[derive(Bundle, Clone, Default)]
+pub struct InheritOutlineBundle {
+    pub inherit: InheritOutline,
+    pub computed: ComputedOutline,
 }
 
 /// Adds support for rendering outlines.
@@ -218,7 +242,6 @@ impl Plugin for OutlinePlugin {
         );
 
         app.add_plugins((
-            ExtractComponentPlugin::<OutlineStencil>::extract_visible(),
             ExtractComponentPlugin::<OutlineRenderLayers>::default(),
             UniformComponentPlugin::<OutlineStencilUniform>::default(),
             UniformComponentPlugin::<OutlineVolumeUniform>::default(),
@@ -228,7 +251,10 @@ impl Plugin for OutlinePlugin {
         ))
         .add_systems(
             PostUpdate,
-            compute_outline_depth.after(TransformSystem::TransformPropagate),
+            (
+                compute_outline.after(TransformSystem::TransformPropagate),
+                set_outline_visibility.in_set(VisibilitySystems::CheckVisibility),
+            ),
         )
         .sub_app_mut(RenderApp)
         .init_resource::<DrawFunctions<StencilOutline>>()
@@ -238,40 +264,51 @@ impl Plugin for OutlinePlugin {
         .add_render_command::<StencilOutline, DrawStencil>()
         .add_render_command::<OpaqueOutline, DrawOutline>()
         .add_render_command::<TransparentOutline, DrawOutline>()
-        .add_systems(ExtractSchedule, extract_outline_view_uniforms)
-        .add_systems(ExtractSchedule, extract_outline_stencil_uniforms)
-        .add_systems(ExtractSchedule, extract_outline_volume_uniforms)
-        .add_systems(ExtractSchedule, extract_outline_deform_uniforms)
         .add_systems(
-            Render,
-            sort_phase_system::<StencilOutline>.in_set(RenderSet::PhaseSort),
+            ExtractSchedule,
+            (
+                extract_outline_uniforms,
+                extract_outline_view_uniforms,
+                extract_outline_deform_uniforms,
+            ),
         )
         .add_systems(
             Render,
-            sort_phase_system::<OpaqueOutline>.in_set(RenderSet::PhaseSort),
+            (
+                prepare_outline_view_bind_group,
+                prepare_outline_stencil_bind_group,
+                prepare_outline_volume_bind_group,
+                prepare_outline_deform_bind_group,
+            )
+                .in_set(RenderSet::PrepareBindGroups),
         )
         .add_systems(
             Render,
-            sort_phase_system::<TransparentOutline>.in_set(RenderSet::PhaseSort),
+            (queue_outline_stencil_mesh, queue_outline_volume_mesh).in_set(RenderSet::QueueMeshes),
         )
         .add_systems(
             Render,
-            queue_outline_view_bind_group.in_set(RenderSet::Queue),
+            (
+                sort_phase_system::<StencilOutline>,
+                sort_phase_system::<OpaqueOutline>,
+                sort_phase_system::<TransparentOutline>,
+            )
+                .in_set(RenderSet::PhaseSort),
         )
         .add_systems(
             Render,
-            queue_outline_stencil_bind_group.in_set(RenderSet::Queue),
+            (
+                batch_and_prepare_render_phase::<StencilOutline, OutlinePipeline>,
+                batch_and_prepare_render_phase::<OpaqueOutline, OutlinePipeline>,
+                batch_and_prepare_render_phase::<TransparentOutline, OutlinePipeline>,
+            )
+                .in_set(RenderSet::PrepareResources),
         )
         .add_systems(
             Render,
-            queue_outline_volume_bind_group.in_set(RenderSet::Queue),
-        )
-        .add_systems(
-            Render,
-            queue_outline_deform_bind_group.in_set(RenderSet::Queue),
-        )
-        .add_systems(Render, queue_outline_stencil_mesh.in_set(RenderSet::Queue))
-        .add_systems(Render, queue_outline_volume_mesh.in_set(RenderSet::Queue));
+            write_batched_instance_buffer::<OutlinePipeline>
+                .in_set(RenderSet::PrepareResourcesFlush),
+        );
 
         let world = &mut app.sub_app_mut(RenderApp).world;
         let node = OutlineNode::new(world);

@@ -7,9 +7,10 @@
 //! - How to read morph target names in [`name_morphs`].
 //! - How to play morph target animations in [`setup_animations`].
 
-use bevy::prelude::*;
+use bevy::{prelude::*, scene::SceneInstance};
 use bevy_mod_outline::{
-    AutoGenerateOutlineNormalsPlugin, OutlineBundle, OutlinePlugin, OutlineVolume,
+    AutoGenerateOutlineNormalsPlugin, InheritOutlineBundle, OutlineBundle, OutlinePlugin,
+    OutlineVolume,
 };
 use std::f32::consts::PI;
 
@@ -46,10 +47,19 @@ fn setup(asset_server: Res<AssetServer>, mut commands: Commands) {
         the_wave: asset_server.load("MorphStressTest.gltf#Animation2"),
         mesh: asset_server.load("MorphStressTest.gltf#Mesh0/Primitive0"),
     });
-    commands.spawn(SceneBundle {
-        scene: asset_server.load("MorphStressTest.gltf#Scene0"),
-        ..default()
-    });
+    commands
+        .spawn(SceneBundle {
+            scene: asset_server.load("MorphStressTest.gltf#Scene0"),
+            ..default()
+        })
+        .insert(OutlineBundle {
+            outline: OutlineVolume {
+                visible: true,
+                width: 3.0,
+                colour: Color::RED,
+            },
+            ..default()
+        });
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             color: Color::WHITE,
@@ -60,7 +70,7 @@ fn setup(asset_server: Res<AssetServer>, mut commands: Commands) {
         ..default()
     });
     commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(3.0, 2.1, 10.2).looking_at(Vec3::ZERO, Vec3::Y),
+        transform: Transform::from_xyz(3.0, 2.1, 5.2).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
     });
 }
@@ -69,21 +79,21 @@ fn setup(asset_server: Res<AssetServer>, mut commands: Commands) {
 fn setup_outlines(
     mut commands: Commands,
     mut has_setup: Local<bool>,
-    meshes: Query<Entity, With<Handle<Mesh>>>,
+    scene_query: Query<&SceneInstance>,
+    scene_manager: Res<SceneSpawner>,
 ) {
     if *has_setup {
         return;
     }
-    for entity in &meshes {
-        commands.entity(entity).insert(OutlineBundle {
-            outline: OutlineVolume {
-                visible: true,
-                width: 3.0,
-                colour: Color::RED,
-            },
-            ..default()
-        });
-        *has_setup = true;
+    if let Ok(scene) = scene_query.get_single() {
+        if scene_manager.instance_is_ready(**scene) {
+            for entity in scene_manager.iter_instance_entities(**scene) {
+                commands
+                    .entity(entity)
+                    .insert(InheritOutlineBundle::default());
+                *has_setup = true;
+            }
+        }
     }
 }
 
@@ -117,8 +127,12 @@ fn name_morphs(
         return;
     }
 
-    let Some(mesh) = meshes.get(&morph_data.mesh) else { return };
-    let Some(names) = mesh.morph_target_names() else { return };
+    let Some(mesh) = meshes.get(&morph_data.mesh) else {
+        return;
+    };
+    let Some(names) = mesh.morph_target_names() else {
+        return;
+    };
     for name in names {
         println!("  {name}");
     }

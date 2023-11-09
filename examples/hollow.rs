@@ -1,17 +1,16 @@
 use std::f32::consts::{PI, TAU};
 
-use bevy::{prelude::*, scene::SceneInstance, window::close_on_esc};
-use bevy_mod_gltf_patched::GltfPlugin;
+use bevy::{gltf::GltfPlugin, prelude::*, scene::SceneInstance, window::close_on_esc};
 use bevy_mod_outline::*;
 
 fn main() {
     App::new()
-        // Disable built-in glTF plugin
-        .add_plugins(DefaultPlugins.build().disable::<bevy::gltf::GltfPlugin>())
-        // Register outline normal vertex attribute with bevy_mod_gltf_patched
+        // Register outline normal vertex attribute with glTF plugin
         .add_plugins(
-            GltfPlugin::default()
-                .add_custom_vertex_attribute("_OUTLINE_NORMAL", ATTRIBUTE_OUTLINE_NORMAL),
+            DefaultPlugins.build().set(
+                GltfPlugin::default()
+                    .add_custom_vertex_attribute("_OUTLINE_NORMAL", ATTRIBUTE_OUTLINE_NORMAL),
+            ),
         )
         .add_plugins(OutlinePlugin)
         .insert_resource(AmbientLight {
@@ -21,13 +20,22 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(
             Update,
-            (setup_scene_once_loaded, rotates, rotates_hue, close_on_esc),
+            (
+                setup_scene_once_loaded,
+                rotates_and_pulses,
+                rotates_hue,
+                close_on_esc,
+            ),
+        )
+        .add_systems(
+            Update,
+            (setup_scene_once_loaded, rotates_hue, close_on_esc),
         )
         .run();
 }
 
 #[derive(Component)]
-struct Rotates;
+struct RotatesAndPulses;
 
 #[derive(Component)]
 struct RotatesHue;
@@ -56,8 +64,19 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             scene: asset_server.load("hollow.glb#Scene0"),
             ..default()
         })
-        .insert(Rotates)
-        .insert(ComputedOutlineDepth::default());
+        .insert(RotatesAndPulses)
+        .insert(OutlineBundle {
+            outline: OutlineVolume {
+                visible: true,
+                width: 0.0,
+                colour: Color::BLUE,
+            },
+            stencil: OutlineStencil {
+                enabled: true,
+                offset: 0.0,
+            },
+            ..default()
+        });
 }
 
 // Once the scene is loaded, start the animation and add an outline
@@ -74,19 +93,7 @@ fn setup_scene_once_loaded(
                 for entity in scene_manager.iter_instance_entities(**scene) {
                     commands
                         .entity(entity)
-                        .insert(OutlineBundle {
-                            outline: OutlineVolume {
-                                visible: true,
-                                width: 7.5,
-                                colour: Color::BLUE,
-                            },
-                            stencil: OutlineStencil {
-                                enabled: true,
-                                offset: 0.0,
-                            },
-                            ..default()
-                        })
-                        .insert(InheritOutlineDepth);
+                        .insert(InheritOutlineBundle::default());
                     if let Ok(name) = name_query.get(entity) {
                         if name.as_str() == "inside" {
                             commands.entity(entity).insert(RotatesHue);
@@ -99,11 +106,17 @@ fn setup_scene_once_loaded(
     }
 }
 
-fn rotates(mut query: Query<&mut Transform, With<Rotates>>, timer: Res<Time>, mut t: Local<f32>) {
+fn rotates_and_pulses(
+    mut query: Query<(&mut Transform, &mut OutlineVolume), With<RotatesAndPulses>>,
+    timer: Res<Time>,
+    mut t: Local<f32>,
+) {
     *t = (*t + timer.delta_seconds()) % TAU;
     let a = t.sin();
-    for mut transform in query.iter_mut() {
+    let b = 10.0 * (3.0 * *t).cos().abs();
+    for (mut transform, mut volume) in query.iter_mut() {
         *transform = Transform::from_rotation(Quat::from_rotation_y(a));
+        volume.width = b;
     }
 }
 

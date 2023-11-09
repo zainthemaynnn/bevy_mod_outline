@@ -1,5 +1,37 @@
 # Changelog
 
+## bevy_mod_outline 0.6.0 (2023-11-08)
+
+### Changed
+- Updated Bevy dependency to 0.12.
+- Changed outline and stencil properties to be inheritable.
+
+## bevy_mod_outline 0.5.1 (2023-11-03)
+
+### Added
+- Added flying_objects example.
+
+### Fixed
+- Fixed Z-fighting between overlay and stencil more reliably.
+
+### Changed
+- Removed unnecessary extraction step.
+- Removed unused vertex attributes bindings.
+
+## bevy_mod_outline 0.5.0 (2023-08-14)
+
+### Changed
+- Updated Bevy dependency to 0.11. (@ramirezmike and @zainthemaynnn)
+- Removed panic if specialising mesh pipeline fails. (@arjo129)
+
+## bevy_mod_outline 0.4.3 (2023-11-06)
+
+## Fixed
+- Fixed Z-fighting between overlay and stencil more reliably (back-port from 0.5.1).
+
+### Changed
+- Removed unnecessary extraction step (back-port from 0.5.1).
+
 ## bevy_mod_outline 0.4.2 (2023-05-30)
 
 ### Fixed

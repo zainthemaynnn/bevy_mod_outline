@@ -6,12 +6,12 @@ use bevy::render::render_phase::{
     PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass,
 };
 use bevy::render::render_resource::ShaderType;
-use bevy::render::render_resource::{BindGroup, BindGroupDescriptor, BindGroupEntry};
+use bevy::render::render_resource::{BindGroup, BindGroupEntry};
 use bevy::render::renderer::RenderDevice;
 use bevy::render::Extract;
 
 use crate::pipeline::OutlinePipeline;
-use crate::OutlineDeform;
+use crate::ComputedOutline;
 
 #[derive(Clone, Component, ShaderType)]
 pub(crate) struct OutlineDeformUniform {
@@ -27,30 +27,32 @@ pub(crate) struct OutlineDeformBindGroup {
 #[allow(clippy::type_complexity)]
 pub(crate) fn extract_outline_deform_uniforms(
     mut commands: Commands,
-    query: Extract<Query<(Entity, &OutlineDeform)>>,
+    query: Extract<Query<(Entity, &ComputedOutline)>>,
 ) {
-    for (entity, deform) in query.iter() {
-        commands
-            .get_or_spawn(entity)
-            .insert(OutlineDeformUniform { seed: deform.seed });
+    for (entity, computed) in query.iter() {
+        if let ComputedOutline(Some(computed)) = computed {
+            commands.get_or_spawn(entity).insert(OutlineDeformUniform {
+                seed: computed.deform.value.seed,
+            });
+        }
     }
 }
 
-pub(crate) fn queue_outline_deform_bind_group(
+pub(crate) fn prepare_outline_deform_bind_group(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
     outline_pipeline: Res<OutlinePipeline>,
     outline_deform_uniforms: Res<ComponentUniforms<OutlineDeformUniform>>,
 ) {
     if let Some(deform_binding) = outline_deform_uniforms.binding() {
-        let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-            entries: &[BindGroupEntry {
+        let bind_group = render_device.create_bind_group(
+            "outline_deform_bind_group",
+            &outline_pipeline.outline_deform_bind_group_layout,
+            &[BindGroupEntry {
                 binding: 0,
                 resource: deform_binding.clone(),
             }],
-            label: Some("outline_deform_bind_group"),
-            layout: &outline_pipeline.outline_deform_bind_group_layout,
-        });
+        );
         commands.insert_resource(OutlineDeformBindGroup { bind_group });
     }
 }

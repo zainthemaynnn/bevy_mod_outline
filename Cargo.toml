@@ -1,6 +1,6 @@
 [package]
 name = "bevy_mod_outline"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "A mesh outlining plugin for Bevy."
@@ -11,7 +11,7 @@ keywords = ["gamedev", "bevy", "outline"]
 categories = ["game-engines", "rendering"]
 
 [dependencies]
-bevy = { version = "0.11", default-features = false, features = [
+bevy = { version = "0.12", default-features = false, features = [
     "bevy_asset",
     "bevy_render",
     "bevy_pbr",
@@ -23,10 +23,10 @@ bevy = { version = "0.11", default-features = false, features = [
 bitfield = "0.14"
 interpolation = "0.2"
 thiserror = "1.0"
-wgpu-types = "0.16.1"
+wgpu-types = "0.17"
 
 [dev-dependencies]
-bevy = { version = "0.11", default-features = false, features = [
+bevy = { version = "0.12", default-features = false, features = [
     "animation",
     "bevy_gltf",
     "bevy_pbr",
@@ -35,7 +35,6 @@ bevy = { version = "0.11", default-features = false, features = [
     "png",
     "x11",
 ] }
-bevy_mod_gltf_patched = { git = "https://github.com/zainthemaynnn/bevy_mod_gltf_patched.git", branch = "bevy-0.11" }
 
 [features]
 default = ["bevy_ui"]
@@ -50,6 +49,10 @@ name = "pieces"
 path = "examples/pieces.rs"
 
 [[example]]
+name = "flying_objects"
+path = "examples/flying_objects.rs"
+
+[[example]]
 name = "render_layers"
 path = "examples/render_layers.rs"
 
@@ -60,3 +63,7 @@ path = "examples/animated_fox.rs"
 [[example]]
 name = "hollow"
 path = "examples/hollow.rs"
+
+[[example]]
+name = "morph_targets"
+path = "examples/morph_targets.rs"
