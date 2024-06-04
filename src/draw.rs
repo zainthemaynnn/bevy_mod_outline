@@ -1,4 +1,7 @@
-use bevy::pbr::{DrawMesh, SetMeshBindGroup, SetMeshViewBindGroup};
+use bevy::core_pipeline::prepass::{
+    DeferredPrepass, DepthPrepass, MotionVectorPrepass, NormalPrepass,
+};
+use bevy::pbr::{DrawMesh, MeshPipelineViewLayoutKey, SetMeshBindGroup, SetMeshViewBindGroup};
 use bevy::prelude::*;
 use bevy::render::render_asset::RenderAssets;
 use bevy::render::render_phase::{DrawFunctions, RenderPhase, SetItemPipeline};
@@ -25,6 +28,40 @@ pub(crate) type DrawStencil = (
     DrawMesh,
 );
 
+fn build_mesh_pipeline_view_layout_key(
+    msaa: Msaa,
+    (normal_prepass, depth_prepass, motion_vector_prepass, deferred_prepass): (
+        bool,
+        bool,
+        bool,
+        bool,
+    ),
+) -> MeshPipelineViewLayoutKey {
+    let mut view_key = MeshPipelineViewLayoutKey::empty();
+
+    if msaa != Msaa::Off {
+        view_key |= MeshPipelineViewLayoutKey::MULTISAMPLED;
+    }
+
+    if normal_prepass {
+        view_key |= MeshPipelineViewLayoutKey::NORMAL_PREPASS;
+    }
+
+    if depth_prepass {
+        view_key |= MeshPipelineViewLayoutKey::DEPTH_PREPASS;
+    }
+
+    if motion_vector_prepass {
+        view_key |= MeshPipelineViewLayoutKey::MOTION_VECTOR_PREPASS;
+    }
+
+    if deferred_prepass {
+        view_key |= MeshPipelineViewLayoutKey::DEFERRED_PREPASS;
+    }
+
+    view_key
+}
+
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub(crate) fn queue_outline_stencil_mesh(
     stencil_draw_functions: Res<DrawFunctions<StencilOutline>>,
@@ -43,6 +80,12 @@ pub(crate) fn queue_outline_stencil_mesh(
         &ExtractedView,
         &mut RenderPhase<StencilOutline>,
         Option<&RenderLayers>,
+        (
+            Has<NormalPrepass>,
+            Has<DepthPrepass>,
+            Has<MotionVectorPrepass>,
+            Has<DeferredPrepass>,
+        ),
     )>,
 ) {
     let draw_stencil = stencil_draw_functions
@@ -54,7 +97,7 @@ pub(crate) fn queue_outline_stencil_mesh(
         .with_msaa(*msaa)
         .with_pass_type(PassType::Stencil);
 
-    for (view, mut stencil_phase, view_mask) in views.iter_mut() {
+    for (view, mut stencil_phase, view_mask, prepasses) in views.iter_mut() {
         let rangefinder = view.rangefinder3d();
         let view_mask = view_mask.copied().unwrap_or_default();
         for (entity, stencil_uniform, outline, outline_mask) in material_meshes.iter() {
@@ -68,7 +111,8 @@ pub(crate) fn queue_outline_stencil_mesh(
                 .with_primitive_topology(mesh.primitive_topology)
                 .with_depth_mode(outline.depth_mode)
                 .with_offset_zero(stencil_uniform.offset == 0.0)
-                .with_morph_targets(mesh.morph_targets.is_some());
+                .with_morph_targets(mesh.morph_targets.is_some())
+                .with_view_key(build_mesh_pipeline_view_layout_key(*msaa, prepasses));
             let Ok(pipeline) =
                 pipelines.specialize(&pipeline_cache, &stencil_pipeline, key, &mesh.layout)
             else {
@@ -118,6 +162,12 @@ pub(crate) fn queue_outline_volume_mesh(
         &mut RenderPhase<OpaqueOutline>,
         &mut RenderPhase<TransparentOutline>,
         Option<&RenderLayers>,
+        (
+            Has<NormalPrepass>,
+            Has<DepthPrepass>,
+            Has<MotionVectorPrepass>,
+            Has<DeferredPrepass>,
+        ),
     )>,
 ) {
     let draw_opaque_outline = opaque_draw_functions
@@ -131,7 +181,7 @@ pub(crate) fn queue_outline_volume_mesh(
 
     let base_key = PipelineKey::new().with_msaa(*msaa);
 
-    for (view, mut opaque_phase, mut transparent_phase, view_mask) in views.iter_mut() {
+    for (view, mut opaque_phase, mut transparent_phase, view_mask, prepasses) in views.iter_mut() {
         let view_mask = view_mask.copied().unwrap_or_default();
         let rangefinder = view.rangefinder3d();
         for (entity, volume_uniform, outline, fragment_uniform, outline_mask) in
@@ -154,7 +204,8 @@ pub(crate) fn queue_outline_volume_mesh(
                 .with_depth_mode(outline.depth_mode)
                 .with_offset_zero(volume_uniform.offset == 0.0)
                 .with_hdr_format(view.hdr)
-                .with_morph_targets(mesh.morph_targets.is_some());
+                .with_morph_targets(mesh.morph_targets.is_some())
+                .with_view_key(build_mesh_pipeline_view_layout_key(*msaa, prepasses));
             let Ok(pipeline) =
                 pipelines.specialize(&pipeline_cache, &outline_pipeline, key, &mesh.layout)
             else {

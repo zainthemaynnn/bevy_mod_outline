@@ -1,3 +1,4 @@
+use bevy::ecs::query::ROQueryItem;
 use bevy::ecs::system::lifetimeless::{Read, SRes};
 use bevy::ecs::system::SystemParamItem;
 use bevy::prelude::*;
@@ -71,13 +72,13 @@ pub(crate) fn prepare_outline_view_bind_group(
 pub(crate) struct SetOutlineViewBindGroup<const I: usize>();
 
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetOutlineViewBindGroup<I> {
-    type ViewWorldQuery = Read<DynamicUniformIndex<OutlineViewUniform>>;
-    type ItemWorldQuery = ();
+    type ViewQuery = Read<DynamicUniformIndex<OutlineViewUniform>>;
+    type ItemQuery = ();
     type Param = SRes<OutlineViewBindGroup>;
     fn render<'w>(
         _item: &P,
-        view_data: &DynamicUniformIndex<OutlineViewUniform>,
-        _entity_data: (),
+        view_data: ROQueryItem<'w, Self::ViewQuery>,
+        _entity_data: Option<()>,
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {

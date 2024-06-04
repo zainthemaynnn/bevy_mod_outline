@@ -1,13 +1,9 @@
 use std::f32::consts::PI;
 
-use bevy::{
-    prelude::{shape::Plane, *},
-    scene::SceneInstance,
-    window::close_on_esc,
-};
+use bevy::{prelude::*, scene::SceneInstance, window::close_on_esc};
 use bevy_mod_outline::{
-    AutoGenerateOutlineNormalsPlugin, InheritOutlineBundle, OutlineBundle, OutlinePlugin,
-    OutlineVolume,
+    AsyncSceneInheritOutline, AsyncSceneInheritOutlinePlugin, AutoGenerateOutlineNormalsPlugin,
+    OutlineBundle, OutlinePlugin, OutlineVolume,
 };
 
 #[derive(Resource)]
@@ -19,11 +15,9 @@ fn main() {
             DefaultPlugins,
             OutlinePlugin,
             AutoGenerateOutlineNormalsPlugin,
+            AsyncSceneInheritOutlinePlugin,
         ))
-        .insert_resource(AmbientLight {
-            color: Color::WHITE,
-            brightness: 1.0,
-        })
+        .insert_resource(AmbientLight::default())
         .add_systems(Startup, setup)
         .add_systems(Update, (setup_scene_once_loaded, close_on_esc))
         .run();
@@ -47,11 +41,13 @@ fn setup(
 
     // Plane
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(Plane {
-            size: 500000.0,
-            subdivisions: 0,
-        })),
-        material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
+        mesh: meshes.add(
+            Plane3d::new(Vec3::Y)
+                .mesh()
+                .size(500000.0, 500000.0)
+                .build(),
+        ),
+        material: materials.add(StandardMaterial::from(Color::rgb(0.3, 0.5, 0.3))),
         ..default()
     });
 
@@ -78,12 +74,12 @@ fn setup(
                 colour: Color::RED,
             },
             ..default()
-        });
+        })
+        .insert(AsyncSceneInheritOutline);
 }
 
-// Once the scene is loaded, start the animation and add an outline
+// Once the scene is loaded, start the animation
 fn setup_scene_once_loaded(
-    mut commands: Commands,
     scene_query: Query<&SceneInstance>,
     scene_manager: Res<SceneSpawner>,
     mut player_query: Query<&mut AnimationPlayer>,
@@ -95,11 +91,6 @@ fn setup_scene_once_loaded(
             (scene_query.get_single(), player_query.get_single_mut())
         {
             if scene_manager.instance_is_ready(**scene) {
-                for entity in scene_manager.iter_instance_entities(**scene) {
-                    commands
-                        .entity(entity)
-                        .insert(InheritOutlineBundle::default());
-                }
                 player.play(animation.0.clone_weak()).repeat();
                 *done = true;
             }

@@ -60,21 +60,21 @@ pub(crate) fn prepare_outline_deform_bind_group(
 pub(crate) struct SetOutlineDeformBindGroup<const I: usize>();
 
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetOutlineDeformBindGroup<I> {
-    type ViewWorldQuery = ();
-    type ItemWorldQuery = Read<DynamicUniformIndex<OutlineDeformUniform>>;
+    type ViewQuery = ();
+    type ItemQuery = Read<DynamicUniformIndex<OutlineDeformUniform>>;
     type Param = SRes<OutlineDeformBindGroup>;
     fn render<'w>(
         _item: &P,
         _view_data: (),
-        entity_data: &DynamicUniformIndex<OutlineDeformUniform>,
+        entity_data: Option<&DynamicUniformIndex<OutlineDeformUniform>>,
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        pass.set_bind_group(
-            I,
-            &bind_group.into_inner().bind_group,
-            &[entity_data.index()],
-        );
+        let Some(binding) = entity_data else {
+            return RenderCommandResult::Failure;
+        };
+
+        pass.set_bind_group(I, &bind_group.into_inner().bind_group, &[binding.index()]);
         RenderCommandResult::Success
     }
 }

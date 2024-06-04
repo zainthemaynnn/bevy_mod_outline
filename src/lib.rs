@@ -23,13 +23,14 @@
 //! [`AutoGenerateOutlineNormalsPlugin`].
 
 use bevy::asset::load_internal_asset;
+use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
 use bevy::prelude::*;
 use bevy::render::batching::{batch_and_prepare_render_phase, write_batched_instance_buffer};
 use bevy::render::extract_component::{
     ExtractComponent, ExtractComponentPlugin, UniformComponentPlugin,
 };
 use bevy::render::mesh::MeshVertexAttribute;
-use bevy::render::render_graph::RenderGraph;
+use bevy::render::render_graph::{RenderGraphApp, RenderLabel};
 use bevy::render::render_phase::{sort_phase_system, AddRenderCommand, DrawFunctions};
 use bevy::render::render_resource::{SpecializedMeshPipelines, VertexFormat};
 use bevy::render::view::{RenderLayers, VisibilitySystems};
@@ -60,11 +61,13 @@ mod draw;
 mod generate;
 mod node;
 mod pipeline;
+mod scene;
 mod uniforms;
 mod view_uniforms;
 
 pub use computed::*;
 pub use generate::*;
+pub use scene::*;
 
 // See https://alexanderameye.github.io/notes/rendering-outlines/
 
@@ -72,11 +75,12 @@ pub use generate::*;
 pub const ATTRIBUTE_OUTLINE_NORMAL: MeshVertexAttribute =
     MeshVertexAttribute::new("Outline_Normal", 1585570526, VertexFormat::Float32x3);
 
-/// Name of the render graph node which draws the outlines.
-///
-/// This node runs after the main 3D passes and before the UI pass. The name can be used to
-/// add additional constraints on node execution order with respect to other passes.
-pub const OUTLINE_PASS_NODE_NAME: &str = "bevy_mod_outline_node";
+/// Labels for render graph nodes which draw outlines.
+#[derive(Copy, Clone, Debug, RenderLabel, Hash, PartialEq, Eq)]
+pub enum NodeOutline {
+    /// This node runs after the main 3D passes and before the UI pass.
+    OutlinePass,
+}
 
 /// A component for stenciling meshes during outline rendering.
 #[derive(Clone, Component)]
@@ -112,7 +116,7 @@ impl Lerp for OutlineStencil {
     fn lerp(&self, other: &Self, scalar: &Self::Scalar) -> Self {
         OutlineStencil {
             enabled: lerp_bool(self.enabled, other.enabled, *scalar),
-            offset: self.offset.lerp(&other.offset, scalar),
+            offset: self.offset.lerp(other.offset, *scalar),
         }
     }
 }
@@ -134,7 +138,7 @@ impl Lerp for OutlineVolume {
     fn lerp(&self, other: &Self, scalar: &Self::Scalar) -> Self {
         OutlineVolume {
             visible: lerp_bool(self.visible, other.visible, *scalar),
-            width: self.width.lerp(&other.width, scalar),
+            width: self.width.lerp(other.width, *scalar),
             colour: {
                 let [r, g, b, a] = self
                     .colour
@@ -156,11 +160,11 @@ pub struct OutlineDeform {
 pub struct OutlineRenderLayers(pub RenderLayers);
 
 impl ExtractComponent for OutlineRenderLayers {
-    type Query = (
+    type QueryData = (
         Option<&'static OutlineRenderLayers>,
         Option<&'static RenderLayers>,
     );
-    type Filter = With<ComputedOutline>;
+    type QueryFilter = With<ComputedOutline>;
     type Out = Self;
 
     fn extract_component(
@@ -252,7 +256,9 @@ impl Plugin for OutlinePlugin {
         .add_systems(
             PostUpdate,
             (
-                compute_outline.after(TransformSystem::TransformPropagate),
+                compute_outline
+                    .after(TransformSystem::TransformPropagate)
+                    .after(VisibilitySystems::VisibilityPropagate),
                 set_outline_visibility.in_set(VisibilitySystems::CheckVisibility),
             ),
         )
@@ -308,27 +314,16 @@ impl Plugin for OutlinePlugin {
             Render,
             write_batched_instance_buffer::<OutlinePipeline>
                 .in_set(RenderSet::PrepareResourcesFlush),
-        );
-
-        let world = &mut app.sub_app_mut(RenderApp).world;
-        let node = OutlineNode::new(world);
-
-        let mut graph = world.resource_mut::<RenderGraph>();
-
-        let draw_3d_graph = graph
-            .get_sub_graph_mut(bevy::core_pipeline::core_3d::graph::NAME)
-            .unwrap();
-        draw_3d_graph.add_node(OUTLINE_PASS_NODE_NAME, node);
-
-        // Run after main 3D pass, but before UI psss
-        draw_3d_graph.add_node_edge(
-            bevy::core_pipeline::core_3d::graph::node::END_MAIN_PASS,
-            OUTLINE_PASS_NODE_NAME,
-        );
-        #[cfg(feature = "bevy_ui")]
-        draw_3d_graph.add_node_edge(
-            OUTLINE_PASS_NODE_NAME,
-            bevy::ui::draw_ui_graph::node::UI_PASS,
+        )
+        .add_render_graph_node::<OutlineNode>(Core3d, NodeOutline::OutlinePass)
+        .add_render_graph_edges(
+            Core3d,
+            (
+                Node3d::Tonemapping,
+                NodeOutline::OutlinePass,
+                Node3d::Fxaa,
+                Node3d::EndMainPassPostProcessing,
+            ),
         );
     }
 

@@ -1,8 +1,6 @@
 This is a fork by me, used for GRIN, which messes with the shaders and pipelines a little bit
 by randomizing the outline width across mesh vertices using `OutlineDeform`. Otherwise, it's pretty much the same.
 
-Some branches are fixes for the official repository, cherry picked from master, and don't have my modifications.
-
 # bevy_mod_outline
 
 [![crates.io](https://img.shields.io/crates/v/bevy_mod_outline.svg)](https://crates.io/crates/bevy_mod_outline)
@@ -17,7 +15,7 @@ vertex extrusion method.
 
 ```toml
 [dependencies]
-bevy_mod_outline = "0.6"
+bevy_mod_outline = "0.7"
 ```
 
 ## Examples
@@ -67,22 +65,23 @@ An animated morphing glTF model with an outline.
 cargo run --example morph_targets
 ```
 
+A pair of spheres, one outlined, with a UI for selecting different anti-aliasing modes.
+
+```shell
+cargo run --example ui_aa
+```
+
 ## Versions
 
 | This Version | Bevy version |
 |--------------|--------------|
+| 0.7.x        | 0.13.x       |
 | 0.6.x        | 0.12.x       |
 | 0.5.x        | 0.11.x       |
 | 0.4.x        | 0.10.x       |
 | 0.3.x        | 0.9.x        |
 | 0.2.x        | 0.8.x        |
 | 0.1.x        | 0.7.x        |
-
-## Features
-
-- `bevy_ui` _(default)_ - Adds a render graph edge to prevent clashing with the
-UI. This adds a dependency on the `bevy_ui` crate and can be disabled if it is
-not used.
 
 ## Licence
 

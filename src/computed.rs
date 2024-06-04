@@ -65,9 +65,13 @@ impl<T: Clone + Default> Sourced<T> {
         }
     }
 
-    pub fn is_changed<U: Component>(&self, tuple: Option<(&U, bool)>) -> bool {
+    pub fn is_changed<U: Component>(&self, tuple: &Option<Ref<U>>) -> bool {
         tuple.is_some() != matches!(self.source, Source::Set)
-            || if let Some((_, c)) = tuple { c } else { false }
+            || if let Some(r) = tuple {
+                r.is_changed()
+            } else {
+                false
+            }
     }
 }
 
@@ -85,11 +89,12 @@ pub(crate) struct ComputedInternal {
 pub struct ComputedOutline(pub(crate) Option<ComputedInternal>);
 
 type OutlineComponents<'a> = (
-    (&'a GlobalTransform, Changed<GlobalTransform>),
-    Option<(&'a OutlineVolume, Changed<OutlineVolume>)>,
-    Option<(&'a OutlineStencil, Changed<OutlineStencil>)>,
-    Option<(&'a OutlineMode, Changed<OutlineMode>)>,
-    Option<(&'a OutlineDeform, Changed<OutlineDeform>)>,
+    Ref<'a, InheritedVisibility>,
+    Ref<'a, GlobalTransform>,
+    Option<Ref<'a, OutlineVolume>>,
+    Option<Ref<'a, OutlineStencil>>,
+    Option<Ref<'a, OutlineMode>>,
+    Option<Ref<'a, OutlineDeform>>,
 );
 
 #[allow(clippy::type_complexity)]
@@ -158,10 +163,7 @@ fn propagate_computed_outline(
 
 fn update_computed_outline(
     computed: &mut ComputedOutline,
-    ((transform, changed_transform), volume, stencil, mode, deform): QueryItem<
-        '_,
-        OutlineComponents,
-    >,
+    (visibility, transform, volume, stencil, mode, deform): QueryItem<'_, OutlineComponents>,
     parent_computed: &ComputedInternal,
     parent_entity: Option<Entity>,
     force_update: bool,
@@ -169,36 +171,41 @@ fn update_computed_outline(
     let changed = force_update
         || if let ComputedOutline(Some(computed)) = computed {
             computed.inherited_from != parent_entity
-                || (changed_transform && matches!(mode, Some((OutlineMode::FlatVertex { .. }, _))))
-                || computed.volume.is_changed(volume)
-                || computed.stencil.is_changed(stencil)
-                || computed.mode.is_changed(mode)
-                || computed.deform.is_changed(deform)
+                || visibility.is_changed()
+                || (transform.is_changed()
+                    && mode
+                        .as_ref()
+                        .map(|r| matches!(r.as_ref(), OutlineMode::FlatVertex { .. }))
+                        .unwrap_or(false))
+                || computed.volume.is_changed(&volume)
+                || computed.stencil.is_changed(&stencil)
+                || computed.mode.is_changed(&mode)
+                || computed.deform.is_changed(&deform)
         } else {
             true
         };
     if changed {
         *computed = ComputedOutline(Some(ComputedInternal {
             inherited_from: parent_entity,
-            volume: if let Some((vol, _)) = volume {
+            volume: if let Some(vol) = volume {
                 Sourced::set(ComputedVolume {
-                    enabled: vol.visible && vol.colour.a() != 0.0,
+                    enabled: visibility.get() && vol.visible && vol.colour.a() != 0.0,
                     offset: vol.width,
-                    colour: vol.colour.into(),
+                    colour: vol.colour.as_linear_rgba_f32().into(),
                 })
             } else {
                 Sourced::inherit(&parent_computed.volume.value)
             },
-            stencil: if let Some((sten, _)) = stencil {
+            stencil: if let Some(sten) = stencil {
                 Sourced::set(ComputedStencil {
-                    enabled: sten.enabled,
+                    enabled: visibility.get() && sten.enabled,
                     offset: sten.offset,
                 })
             } else {
                 Sourced::inherit(&parent_computed.stencil.value)
             },
-            mode: if let Some((m, _)) = mode {
-                Sourced::set(match m {
+            mode: if let Some(m) = mode {
+                Sourced::set(match m.as_ref() {
                     OutlineMode::FlatVertex {
                         model_origin: origin,
                     } => ComputedMode {
@@ -213,7 +220,7 @@ fn update_computed_outline(
             } else {
                 Sourced::inherit(&parent_computed.mode.value)
             },
-            deform: if let Some((def, _)) = deform {
+            deform: if let Some(def) = deform {
                 Sourced::set(ComputedDeform { seed: def.seed })
             } else {
                 Sourced::inherit(&parent_computed.deform.value)
