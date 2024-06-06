@@ -92,12 +92,19 @@ struct Vertex {
 #ifdef MORPH_TARGETS
     @builtin(vertex_index) index: u32,
 #endif
+#ifdef Y_CUTOFF
+    @location(7) y_cutoff: f32,
+#endif
 };
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
 #ifdef FLAT_DEPTH
     @location(0) @interpolate(flat) flat_depth: f32,
+#endif
+#ifdef Y_CUTOFF
+    @location(1) y_cutoff: f32,
+    @location(2) world_position: vec4<f32>,
 #endif
 };
 
@@ -188,6 +195,10 @@ fn vertex(vertex_no_morph: Vertex) -> VertexOutput {
     out.position = vec4<f32>(out_xy, clip_pos.zw);
 #ifdef FLAT_DEPTH
     out.flat_depth = model_origin_z(vstage.origin, view.view_proj);
+#endif
+#ifdef Y_CUTOFF
+    out.world_position = mesh_functions::mesh_position_local_to_world(model, vec4<f32>(vertex.position, 1.0));
+    out.y_cutoff = vertex_no_morph.y_cutoff;
 #endif
     return out;
 }

@@ -36,7 +36,7 @@ use crate::uniforms::{
     OutlineVolumeUniform,
 };
 use crate::view_uniforms::OutlineViewUniform;
-use crate::ATTRIBUTE_OUTLINE_NORMAL;
+use crate::{ATTRIBUTE_OUTLINE_NORMAL, ATTRIBUTE_Y_CUTOFF};
 
 pub(crate) const OUTLINE_SHADER_HANDLE: Handle<Shader> =
     Handle::weak_from_u128(2101625026478770097);
@@ -273,6 +273,12 @@ impl SpecializedMeshPipeline for OutlinePipeline {
             buffer_attrs.push(Mesh::ATTRIBUTE_POSITION.at_shader_location(0));
         }
 
+        if layout.contains(ATTRIBUTE_Y_CUTOFF) {
+            vertex_defs.push("Y_CUTOFF".into());
+            fragment_defs.push("Y_CUTOFF".into());
+            buffer_attrs.push(ATTRIBUTE_Y_CUTOFF.at_shader_location(7));
+        }
+
         let mut bind_layouts = vec![
             self.mesh_pipeline.get_view_layout(key.view_key()).clone(),
             setup_morph_and_skinning_defs(
@@ -342,6 +348,7 @@ impl SpecializedMeshPipeline for OutlinePipeline {
                 range: 0..4,
             });
         }
+
         Ok(RenderPipelineDescriptor {
             vertex: VertexState {
                 shader: OUTLINE_SHADER_HANDLE,

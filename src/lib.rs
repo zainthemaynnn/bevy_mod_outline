@@ -75,6 +75,10 @@ pub use scene::*;
 pub const ATTRIBUTE_OUTLINE_NORMAL: MeshVertexAttribute =
     MeshVertexAttribute::new("Outline_Normal", 1585570526, VertexFormat::Float32x3);
 
+/// HACK: keep this in line with `grin_render`!
+pub const ATTRIBUTE_Y_CUTOFF: MeshVertexAttribute =
+    MeshVertexAttribute::new("y_cutoff", 988540917, VertexFormat::Float32);
+
 /// Labels for render graph nodes which draw outlines.
 #[derive(Copy, Clone, Debug, RenderLabel, Hash, PartialEq, Eq)]
 pub enum NodeOutline {
